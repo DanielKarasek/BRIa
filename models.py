@@ -61,13 +61,13 @@ class HeadClassification(nn.Module):
     def __init__(self, num_ftrs, class_cnt):
         super(HeadClassification, self).__init__()
         self.class_head_fn1 = nn.Linear(num_ftrs, class_cnt)
-        self.class_head_out = nn.Softmax()
+        # self.class_head_out = nn.Softmax()
         self._init()
 
     def forward(self, x):
         cls_x = self.class_head_fn1(x)
-        cls_out = self.class_head_out(cls_x)
-        return cls_out
+        # cls_out = self.class_head_out(cls_x)
+        return cls_x
 
     def _init(self):
         init.kaiming_normal_(self.class_head_fn1.weight, mode='fan_out')

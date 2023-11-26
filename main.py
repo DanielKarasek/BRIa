@@ -9,7 +9,7 @@ from losses import Criterion
 from models import ResnetFactory
 import sklearn.metrics
 
-from visualiser import create_confusion_plot, plot_losses
+from visualiser import create_confusion_plot, plot_losses, visualise_gt_noised_and_predicted
 
 
 def create_model(cls_cnt: int, regressinout_out_dim: int) -> torch.nn.Module:
@@ -182,8 +182,13 @@ def main():
     model = create_model(cls_cnt=CLS_CNT,
                          regressinout_out_dim=REGRESSION_OUT_DIM)
     criterion = Criterion()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
     dl_train, dl_test = create_dataloader(BATCH_SIZE)
+    # for batch_idx, (data, target_regression, target_classification) in enumerate(dl_train):
+    #     dirty = data[0]
+    #     clean = target_regression[0]
+    #     cls = target_classification[0]
+    #     visualise_gt_noised_and_predicted(dirty, clean, clean)
     # 30+60+120+240 = 450
     scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
                                                                T_0=30,
