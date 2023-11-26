@@ -43,6 +43,12 @@ class ResnetFactory:
                          pretrained=pretrained,
                          resnet_size=101)
 
+    @staticmethod
+    def TransformerBRIaProModelPlus(class_cnt: int,
+                                    regression_out_dim: int) -> nn.Module:
+        return TransformerBRIaProModelPlus(class_cnt=class_cnt,
+                                           regression_out_dim=regression_out_dim)
+
 
 class HeadClassification(nn.Module):
     def __init__(self, num_ftrs, class_cnt):
@@ -69,6 +75,22 @@ class HeadRegression(nn.Module):
         reg_out = self.regression_out(reg_x)
         return reg_out
 
+
+class TransformerBRIaProModelPlus(nn.Module):
+    def __init__(self,
+                 class_cnt: int,
+                 regression_out_dim: int):
+        super(TransformerBRIaProModelPlus, self).__init__()
+        d_model = 512
+        self.transformer = nn.Transformer(d_model=d_model)
+        self.classification_head = HeadClassification(d_model, class_cnt)
+        self.regression_head = HeadRegression(d_model, regression_out_dim)
+
+    def forward(self, x):
+        x = self.transformer(x)
+        cls_out = self.classification_head(x)
+        reg_out = self.regression_head(x)
+        return cls_out, reg_out
 
 class ResnetAny(nn.Module):
     def __init__(self,
