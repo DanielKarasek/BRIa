@@ -9,54 +9,62 @@ from enums import NoiseTypeEnum
 class DatasetEEGNoise(Dataset):
     def __init__(
         self,
-        eeg_segments_path: str,
-        eog_segments_path: str,
-        emg_segments_path: str,
+        eeg_data: str,
+        eog_data: str,
+        emg_data: str,
     ) -> None:
-        self._eeg_segments = np.load(eeg_segments_path)
-        self._eog_segments = np.load(eog_segments_path)
-        self._emg_segments = np.load(emg_segments_path)
+        self._eeg_data = np.load(eeg_data)
+        self._eog_data = np.load(eog_data)
+        self._emg_data = np.load(emg_data)
 
     def __len__(self) -> int:
-        return len(self._eeg_segments)
+        return len(self._eeg_data)
 
     def __getitem__(self, index: int) -> tuple[int, int, NoiseTypeEnum]:
-        clean_eeg_segment = self._eeg_segments[index]
+        clean_eeg_segments = self._eeg_data[index]
 
         # get random noise type
         category = random.choice(list(NoiseTypeEnum))
 
-        # combine clean and noisy segments
-        match category:
-            case NoiseTypeEnum.CLEAN:
-                combined_eeg_segment = clean_eeg_segment
-            case NoiseTypeEnum.OCULAR_ARTIFACTS:
-                # get random noisy segment with ocular artifacts
-                noisy_segment_index = random.randrange(0, len(self._eog_segments))
-                noisy_eeg_segment = self._eog_segments[noisy_segment_index]
+        combined_eeg_segments = self._add_noise(clean_eeg_segments, category)
 
-                # combine clean and noisy segments
-                combined_eeg_segment = self._combine_clean_and_noisy_segments(
-                    clean_eeg_segment, noisy_eeg_segment
+        return clean_eeg_segments, combined_eeg_segments, category
+
+    def _add_noise(
+        self, clean_segments: np.ndarray, noise_type: NoiseTypeEnum
+    ) -> np.ndarray:
+        """Add noise to clean EEG segments. SNR and noise sample are chosen randomly."""
+        match noise_type:
+            case NoiseTypeEnum.CLEAN:
+                return clean_segments
+            case NoiseTypeEnum.OCULAR_ARTIFACTS:
+                snr_db = random.uniform(-7, 2)  # according to paper
+                eog_index = random.randrange(0, len(self._eog_data))
+                noisy_segments = self._eog_data[eog_index]
+                return self._combine_clean_and_noisy_segments(
+                    clean_segments, noisy_segments, snr_db
                 )
             case NoiseTypeEnum.MYOGENIC_ARTIFACTS:
-                # get random noisy segment with myogenic artifacts
-                noisy_segment_index = random.randrange(0, len(self._emg_segments))
-                noisy_eeg_segment = self._emg_segments[noisy_segment_index]
-
-                # combine clean and noisy segments
-                combined_eeg_segment = self._combine_clean_and_noisy_segments(
-                    clean_eeg_segment, noisy_eeg_segment
+                snr_db = random.uniform(-7, 4)  # according to paper
+                emg_index = random.randrange(0, len(self._emg_data))
+                noisy_segments = self._emg_data[emg_index]
+                return self._combine_clean_and_noisy_segments(
+                    clean_segments, noisy_segments, snr_db
                 )
             case _:
-                raise ValueError(f"Unknown noise type: {category}")
+                raise ValueError(f"Unknown noise type: {noise_type}")
 
-        return clean_eeg_segment, combined_eeg_segment, category
+    def _rms(self, records: np.ndarray) -> float:
+        """Calculate root mean square of data."""
+        return np.sqrt(np.mean(np.square(records)))
 
     def _combine_clean_and_noisy_segments(
-        self,
-        clean_segments: np.ndarray,
-        noisy_segments: np.ndarray,
-        lambda_param: float = 0.5,
+        self, clean_segments: np.ndarray, noisy_segments: np.ndarray, snr_db: float
     ) -> np.ndarray:
-        return clean_segments + lambda_param * noisy_segments
+        """Combine clean and noisy EEG segments. Using methods from paper."""
+        snr_train = 10 ** (0.1 * snr_db)
+
+        coe = self._rms(clean_segments) / (self._rms(noisy_segments) * snr_train)
+        adjusted_noise = noisy_segments * coe
+        result = clean_segments + adjusted_noise
+        return result
