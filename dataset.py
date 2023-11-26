@@ -12,10 +12,20 @@ class DatasetEEGNoise(Dataset):
         eeg_data: str,
         eog_data: str,
         emg_data: str,
+        eeg_count: int = None,
     ) -> None:
         self._eeg_data = np.load(eeg_data)
         self._eog_data = np.load(eog_data)
         self._emg_data = np.load(emg_data)
+
+        if eeg_count:
+            if eeg_count > len(self._eeg_data):
+                raise ValueError(
+                    f"eeg_count ({eeg_count}) must be less than eeg_data length ({len(self._eeg_data)})"
+                )
+
+            indexes = np.random.choice(self._eeg_data.shape[0], 3, replace=False)
+            self._eeg_data = self._eeg_data[indexes]
 
     def __len__(self) -> int:
         return len(self._eeg_data)
