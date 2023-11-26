@@ -10,7 +10,7 @@ class ResnetFactory:
     @staticmethod
     def Resnet18(class_cnt: int,
                  regression_out_dim: int,
-                 pretrained=True, ):
+                 pretrained=True) -> nn.Module:
         return ResnetAny(class_cnt=class_cnt,
                          regression_out_dim=regression_out_dim,
                          pretrained=pretrained,
@@ -19,7 +19,7 @@ class ResnetFactory:
     @staticmethod
     def Resnet34(class_cnt: int,
                  regression_out_dim: int,
-                 pretrained=True, ):
+                 pretrained=True) -> nn.Module:
         return ResnetAny(class_cnt=class_cnt,
                          regression_out_dim=regression_out_dim,
                          pretrained=pretrained,
@@ -28,7 +28,7 @@ class ResnetFactory:
     @staticmethod
     def Resnet50(class_cnt: int,
                  regression_out_dim: int,
-                 pretrained=True, ):
+                 pretrained=True) -> nn.Module:
         return ResnetAny(class_cnt=class_cnt,
                          regression_out_dim=regression_out_dim,
                          pretrained=pretrained,
@@ -37,19 +37,46 @@ class ResnetFactory:
     @staticmethod
     def Resnet101(class_cnt: int,
                   regression_out_dim: int,
-                  pretrained=True, ):
+                  pretrained=True) -> nn.Module:
         return ResnetAny(class_cnt=class_cnt,
                          regression_out_dim=regression_out_dim,
                          pretrained=pretrained,
                          resnet_size=101)
 
 
-class ResnetAny:
+class HeadClassification(nn.Module):
+    def __init__(self, num_ftrs, class_cnt):
+        super(HeadClassification, self).__init__()
+        self.class_head_fn1 = nn.Linear(num_ftrs, class_cnt)
+        self.class_head_out = nn.Softmax(class_cnt)
+
+    def forward(self, x):
+        cls_x = self.class_head_fn1(x)
+        cls_out = self.class_head_out(cls_x)
+        return cls_out
+
+
+class HeadRegression(nn.Module):
+    def __init__(self, num_ftrs, regression_out_dim):
+        super(HeadRegression, self).__init__()
+        self.regression_fn1 = nn.Linear(num_ftrs, regression_out_dim * 2)
+        self.regression_fn1_act = nn.ReLU()
+        self.regression_out = nn.Linear(regression_out_dim * 2, num_ftrs)
+
+    def forward(self, x):
+        reg_x = self.regression_fn1(x)
+        reg_x = self.regression_fn1_act(reg_x)
+        reg_out = self.regression_out(reg_x)
+        return reg_out
+
+
+class ResnetAny(nn.Module):
     def __init__(self,
                  class_cnt: int,
                  regression_out_dim: int,
                  pretrained=True,
                  resnet_size: int = 18):
+        super(ResnetAny, self).__init__()
         assert resnet_size == 18 or resnet_size == 34 or resnet_size == 50 or resnet_size == 101
         if resnet_size == 18:
             self.model = resnet18(pretrained)
@@ -65,11 +92,9 @@ class ResnetAny:
         self.model.gmp = nn.AdaptiveMaxPool2d(1)
 
         self.model.dropout = nn.Dropout()
-        self.model.class_head_fn1 = nn.Linear(self.num_ftrs, self._class_cnt)
-        self.model.class_head_out = nn.Softmax(self._class_cnt)
-        self.model.regression_fn1 = nn.Linear(self.num_ftrs, regression_out_dim * 2)
-        self.model.regression_fn1_act = nn.ReLU()
-        self.model.regression_out = nn.Linear(regression_out_dim * 2, self.num_ftrs)
+
+        self.model.classification_head = HeadClassification(self.num_ftrs, self._class_cnt)
+        self.model.regression_head = HeadRegression(self.num_ftrs, regression_out_dim)
 
         self._initialize_weights()
 
@@ -92,13 +117,8 @@ class ResnetAny:
 
         x = self.model.dropout(x)
 
-        cls_x = self.model.class_head_fn1(x)
-        cls_out = self.model.class_head_out(cls_x)
-
-        reg_x = self.model.regression_fn1(x)
-        reg_x = self.model.regression_fn1_act(reg_x)
-        reg_out = self.model.regression_out(reg_x)
-
+        cls_out = self.model.classification_head(x)
+        reg_out = self.model.regression_head(x)
         return cls_out, reg_out
 
     def _initialize_weights(self):
