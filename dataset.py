@@ -28,7 +28,11 @@ class DatasetEEGNoise(Dataset):
 
         combined_eeg_segments = self._add_noise(clean_eeg_segments, category)
 
-        return clean_eeg_segments, combined_eeg_segments, category
+        return (
+            self._normalize(clean_eeg_segments),
+            self._normalize(combined_eeg_segments),
+            category,
+        )
 
     def _add_noise(
         self, clean_segments: np.ndarray, noise_type: NoiseTypeEnum
@@ -57,6 +61,10 @@ class DatasetEEGNoise(Dataset):
     def _rms(self, records: np.ndarray) -> float:
         """Calculate root mean square of data."""
         return np.sqrt(np.mean(np.square(records)))
+
+    def _normalize(self, records: np.ndarray) -> np.ndarray:
+        """Normalize data."""
+        return records / np.std(records)
 
     def _combine_clean_and_noisy_segments(
         self, clean_segments: np.ndarray, noisy_segments: np.ndarray, snr_db: float
