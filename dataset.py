@@ -13,24 +13,26 @@ class DatasetEEGNoise(Dataset):
         eog_data: str,
         emg_data: str,
         eeg_count: int = None,
-    ) -> None:
+    ):
         self._eeg_data = np.load(eeg_data)
         self._eog_data = np.load(eog_data)
         self._emg_data = np.load(emg_data)
-
+        self._eeg_data = self._eeg_data.astype(np.float32)
+        self._eog_data = self._eog_data.astype(np.float32)
+        self._emg_data = self._emg_data.astype(np.float32)
         if eeg_count:
             if eeg_count > len(self._eeg_data):
                 raise ValueError(
                     f"eeg_count ({eeg_count}) must be less than eeg_data length ({len(self._eeg_data)})"
                 )
 
-            indexes = np.random.choice(self._eeg_data.shape[0], 3, replace=False)
+            indexes = np.random.choice(self._eeg_data.shape[0], eeg_count, replace=False)
             self._eeg_data = self._eeg_data[indexes]
 
     def __len__(self) -> int:
         return len(self._eeg_data)
 
-    def __getitem__(self, index: int) -> tuple[int, int, NoiseTypeEnum]:
+    def __getitem__(self, index: int) -> tuple[np.ndarray, np.ndarray, NoiseTypeEnum]:
         clean_eeg_segments = self._eeg_data[index]
 
         # get random noise type
@@ -38,11 +40,8 @@ class DatasetEEGNoise(Dataset):
 
         combined_eeg_segments = self._add_noise(clean_eeg_segments, category)
 
-        return (
-            self._normalize(clean_eeg_segments),
-            self._normalize(combined_eeg_segments),
-            category,
-        )
+        return self._normalize(clean_eeg_segments), self._normalize(combined_eeg_segments), category.value
+
 
     def _add_noise(
         self, clean_segments: np.ndarray, noise_type: NoiseTypeEnum
@@ -51,14 +50,14 @@ class DatasetEEGNoise(Dataset):
         match noise_type:
             case NoiseTypeEnum.CLEAN:
                 return clean_segments
-            case NoiseTypeEnum.OCULAR_ARTIFACTS:
+            case NoiseTypeEnum.EYE_MOVEMENT:
                 snr_db = random.uniform(-7, 2)  # according to paper
                 eog_index = random.randrange(0, len(self._eog_data))
                 noisy_segments = self._eog_data[eog_index]
                 return self._combine_clean_and_noisy_segments(
                     clean_segments, noisy_segments, snr_db
                 )
-            case NoiseTypeEnum.MYOGENIC_ARTIFACTS:
+            case NoiseTypeEnum.FACIAL_MUSCLES_MOVEMENT:
                 snr_db = random.uniform(-7, 4)  # according to paper
                 emg_index = random.randrange(0, len(self._emg_data))
                 noisy_segments = self._emg_data[emg_index]

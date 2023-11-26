@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from torch import optim
 
+from dataloader import create_dataloader
 from losses import Criterion
 from models import ResnetFactory
 import sklearn.metrics
@@ -11,15 +12,10 @@ import sklearn.metrics
 from visualiser import create_confusion_plot, plot_losses
 
 
-def get_dataloaders(batch_size: int) -> (torch.utils.data.DataLoader, torch.utils.data.DataLoader):
-    return None, None
-
-
 def create_model(cls_cnt: int, regressinout_out_dim: int) -> torch.nn.Module:
-    model = ResnetFactory.Resnet18(class_cnt=cls_cnt,
-                                   regression_out_dim=regressinout_out_dim,
-                                   pretrained=True)
-    model.cuda()
+    model = ResnetFactory.AE(class_cnt=cls_cnt,
+                                   regression_out_dim=regressinout_out_dim)
+    model = model.cuda()
     return model
 
 
@@ -45,7 +41,11 @@ def train_single_epoch(model: torch.nn.Module,
                        epoch: int) -> dict:
     model.train()
     for batch_idx, (data, target_regression, target_classification) in enumerate(dl_train):
-        output_regression, output_classification = model(data)
+        data = data.cuda()
+
+        target_regression = target_regression.cuda()
+        target_classification = target_classification.cuda()
+        output_classification, output_regression = model(data)
         loss, loss_regression, loss_classification = criterion(output_regression,
                                                                output_classification,
                                                                target_regression,
@@ -76,11 +76,15 @@ def evaluate_single_epoch(model: torch.nn.Module,
     all_targets = np.array([])
     with torch.no_grad():
         for data, target_regression, target_classification in dl_test:
-            output_regression, output_classification = model(data)
-            _, loss_cls, loss_regr = criterion(output_regression,
+            data = data.cuda()
+
+            target_regression = target_regression.cuda()
+            target_classification = target_classification.cuda()
+            output_classification, output_regression = model(data)
+            _, loss_regr, loss_cls = criterion(output_regression,
                                                output_classification,
                                                target_regression,
-                                               target_classification)[0].item()
+                                               target_classification)
 
             loss_classification += loss_cls
             loss_regression += loss_regr
@@ -108,8 +112,9 @@ def evaluate_single_epoch(model: torch.nn.Module,
                                                            correct,
                                                            len(dl_test.dataset),
                                                            100. * correct / len(dl_test.dataset)))
-    loss_history["test"]["regression"].append(loss_regression)
-    loss_history["test"]["classification"].append(loss_classification)
+    loss_history["test"]["regression"].append(loss_regression.item())
+    loss_history["test"]["classification"].append(loss_classification.item())
+    return loss_history
 
 
 def create_stats(model: torch.nn.Module,
@@ -120,7 +125,10 @@ def create_stats(model: torch.nn.Module,
     all_targets = np.array([])
     with torch.no_grad():
         for data, target_regression, target_classification in dl_test:
-            output_regression, output_classification = model(data)
+            data = data.cuda()
+            target_regression = target_regression.cuda()
+            target_classification = target_classification.cuda()
+            output_classification, output_regression = model(data)
 
             predictions = output_classification.argmax(dim=1, keepdim=True).detach()
 
@@ -174,12 +182,16 @@ def main():
     model = create_model(cls_cnt=CLS_CNT,
                          regressinout_out_dim=REGRESSION_OUT_DIM)
     criterion = Criterion()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
-    dl_train, dl_test = get_dataloaders(BATCH_SIZE)
-    # 30+60+120+240 = 210
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    dl_train, dl_test = create_dataloader(BATCH_SIZE)
+    # 30+60+120+240 = 450
     scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
                                                                T_0=30,
                                                                T_mult=2,
                                                                eta_min=0.0000001)
 
     train(model, criterion, optimizer, scheduler, dl_train, dl_test, "./results", EPOCH_CNT)
+
+
+if __name__ == '__main__':
+    main()
