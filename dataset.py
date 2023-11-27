@@ -13,16 +13,18 @@ class DatasetEEGNoise(Dataset):
         eog_data: str,
         emg_data: str,
         noise_types: list[NoiseTypeEnum],
-        eeg_count: int = None,
+        return_fft: bool = False,
+        eeg_count: int = -1,
     ):
         self._eeg_data = np.load(eeg_data)
         self._eog_data = np.load(eog_data)
         self._emg_data = np.load(emg_data)
+        self._return_fft = return_fft
         self._noise_types = noise_types
         self._eeg_data = self._eeg_data.astype(np.float32)
         self._eog_data = self._eog_data.astype(np.float32)
         self._emg_data = self._emg_data.astype(np.float32)
-        if eeg_count:
+        if eeg_count > 0:
             if eeg_count > len(self._eeg_data):
                 raise ValueError(
                     f"eeg_count ({eeg_count}) must be less than eeg_data length ({len(self._eeg_data)})"
@@ -40,9 +42,12 @@ class DatasetEEGNoise(Dataset):
         # get random noise type
         category = random.choice(self._noise_types)
         combined_eeg_segments = self._add_noise(clean_eeg_segments, category)
-
-        return self._normalize(combined_eeg_segments), self._normalize(clean_eeg_segments), category.value
-
+        combined = self._normalize(combined_eeg_segments)
+        clean = self._normalize(clean_eeg_segments)
+        if self._return_fft:
+            combined = np.asarray(np.abs(np.fft.fft(combined)[:256]), np.float32)
+            clean = np.asarray(np.abs(np.fft.fft(clean)[:256]), np.float32)
+        return combined, clean, category.value
 
     def _add_noise(
         self, clean_segments: np.ndarray, noise_type: NoiseTypeEnum

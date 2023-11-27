@@ -1,15 +1,15 @@
 from torch import nn as nn
 
-from models.AE import AE, AE_class, AERegression
+from models.AE import AE_class, AERegression
 from models.transformer import Transformer
 
 
 class ModelFactory:
     @staticmethod
     def AERegression(class_cnt: int,
-           regression_out_dim: int) -> nn.Module:
+                     regression_out_dim: int) -> nn.Module:
         return AERegression(class_cnt=class_cnt,
-                  regression_out_dim=regression_out_dim)
+                            regression_out_dim=regression_out_dim)
 
     @staticmethod
     def tranformer_classification(class_cnt: int,

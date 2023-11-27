@@ -7,6 +7,7 @@ from torch.nn import MSELoss
 from dataloader import create_dataloader
 from enums import NoiseTypeEnum
 from models.model_factory import ModelFactory
+from visualiser import visualise_gt_noised_and_predicted
 
 
 def create_model(cls_cnt: int, regressinout_out_dim: int) -> torch.nn.Module:
@@ -50,7 +51,8 @@ def train_single_epoch(model: torch.nn.Module,
         running_loss += loss.item()
 
     running_loss /= len(dl_train.dataset)
-
+    if epoch == 30:
+        optimizer.param_groups[0]['initial_lr'] /= 10
     print(f'Train Epoch: {epoch}\n'
           f'\tMean Regression Loss: {running_loss:.6f}')
 
@@ -98,15 +100,15 @@ def train(model: torch.nn.Module,
 
 def main():
     CLS_CNT = 3
-    REGRESSION_OUT_DIM = 512
+    REGRESSION_OUT_DIM = 256
     BATCH_SIZE = 64
     EPOCH_CNT = 450
 
     model = create_model(cls_cnt=CLS_CNT,
                          regressinout_out_dim=REGRESSION_OUT_DIM)
     criterion = MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.00003)
-    dl_train, dl_test = create_dataloader(BATCH_SIZE, [NoiseTypeEnum.EYE_MOVEMENT])
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.000008)
+    dl_train, dl_test = create_dataloader(BATCH_SIZE, [NoiseTypeEnum.FACIAL_MUSCLES_MOVEMENT], return_fft=True)
     # for batch_idx, (data, target_regression, target_classification) in enumerate(dl_train):
     # 30+60+120+240 = 450
     scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,

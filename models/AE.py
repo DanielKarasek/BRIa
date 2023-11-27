@@ -12,14 +12,32 @@ class AERegression(torch.nn.Module):
         # layer followed by Relu activation function
         # 784 ==> 9
         self.encoder = torch.nn.Sequential(
-            torch.nn.Identity()
+            torch.nn.Linear(256, 256),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(p=0.5),
+            torch.nn.Linear(256, 256),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(p=0.5),
+            torch.nn.Linear(256, 128),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(p=0.5),
+            torch.nn.Linear(128, 128),
+            torch.nn.ReLU(),
         )
 
         self.decoder = torch.nn.Sequential(
-            torch.nn.Identity()
+            torch.nn.Linear(128, 128),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(p=0.5),
+            torch.nn.Linear(128, 128),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(p=0.5),
+            torch.nn.Linear(128, 256),
+            torch.nn.ReLU(),
+            torch.nn.Linear(256, 256),
         )
-        self.classification_head = ClassificationHead(512, class_cnt)
-        self.regression_head = RegressionHead(512, regression_out_dim)
+        self.classification_head = ClassificationHead(256, class_cnt)
+        self.regression_head = RegressionHead(256, regression_out_dim)
 
     def forward(self, x: torch.Tensor):
         encoded = self.encoder(x)
@@ -51,9 +69,9 @@ class AE_class(torch.nn.Module):
             torch.nn.ReLU(),
             torch.nn.Linear(128, 256),
             torch.nn.ReLU(),
-            torch.nn.Linear(256, 512),
+            torch.nn.Linear(256, 256),
             torch.nn.ReLU(),
-            torch.nn.Linear(512, 512)
+            torch.nn.Linear(256, 512)
         )
         self.classification_head = ClassificationHead(512, class_cnt)
         self.regression_head = RegressionHead(512, regression_out_dim)

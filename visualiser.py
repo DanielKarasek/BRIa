@@ -58,7 +58,7 @@ def main():
     noise = np.load('data/eyes.npy')
     # noised_example = true[0] + noise[0] * 0.008
     #
-    fft = np.fft.fft(noise[0])[:256]
+    fft = abs(np.fft.fft(true[0])[:256])
     #
     # fft = np.fft.fft(true[0])[:256]
     visualise_gt_noised_and_predicted(fft, fft, fft)

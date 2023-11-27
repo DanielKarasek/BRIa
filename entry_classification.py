@@ -9,7 +9,7 @@ from torch.nn import CrossEntropyLoss
 from dataloader import create_dataloader
 from enums import NoiseTypeEnum
 from models.model_factory import ModelFactory
-from visualiser import create_confusion_plot, plot_losses
+from visualiser import create_confusion_plot
 
 
 def create_model(cls_cnt: int, regressinout_out_dim: int) -> torch.nn.Module:
