@@ -60,7 +60,6 @@ def train_single_epoch(model: torch.nn.Module,
 
         loss_history["train"]["regression"].append(loss_regression.item())
         loss_history["train"]["classification"].append(loss_classification.item())
-        print(loss_history["train"]["regression"][-1])
 
     running_regression_loss /= len(dl_train.dataset)
     running_classification_loss /= len(dl_train.dataset)
@@ -87,7 +86,6 @@ def evaluate_single_epoch(model: torch.nn.Module,
     with torch.no_grad():
         for data, target_regression, target_classification in dl_test:
             data = data.cuda()
-
             target_regression = target_regression.cuda()
             target_classification = target_classification.cuda()
             output_classification, output_regression = model(data)
@@ -106,10 +104,14 @@ def evaluate_single_epoch(model: torch.nn.Module,
 
             all_preds = np.concatenate([all_preds, predictions])
             all_targets = np.concatenate([all_targets, target_classification])
+    # visualise_gt_noised_and_predicted(data[0].cpu().numpy(),
+    #                                   target_regression[0].cpu().numpy(),
+    #                                   output_regression[0].cpu().numpy(),
+    #                                   )
 
     if epoch % 50 == 0:
-        all_preds = np.concatenate([all_preds, [2]])
-        all_targets = np.concatenate([all_targets, [2]])
+        all_preds = np.concatenate([all_preds, [0, 2]])
+        all_targets = np.concatenate([all_targets, [0, 2]])
         create_confusion_plot(all_preds,
                               all_targets,
                               show=False,
@@ -193,7 +195,7 @@ def main():
     model = create_model(cls_cnt=CLS_CNT,
                          regressinout_out_dim=REGRESSION_OUT_DIM)
     criterion = Criterion()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.000_05)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.00003)
     dl_train, dl_test = create_dataloader(BATCH_SIZE)
     # for batch_idx, (data, target_regression, target_classification) in enumerate(dl_train):
     #

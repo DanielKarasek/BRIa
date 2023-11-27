@@ -7,13 +7,13 @@ class RegressionHead(nn.Module):
         super(RegressionHead, self).__init__()
         self.regression_fn1 = nn.Linear(num_ftrs, regression_out_dim // 2)
         self.regression_fn1_act = nn.ReLU()
-        self.regression_out = nn.Linear(regression_out_dim // 2, regression_out_dim)
+        self.regression_out = nn.Linear(num_ftrs, regression_out_dim)
         self._init()
 
     def forward(self, x):
-        reg_x = self.regression_fn1(x)
-        reg_x = self.regression_fn1_act(reg_x)
-        reg_out = self.regression_out(reg_x)
+        # reg_x = self.regression_fn1(x)
+        # reg_x = self.regression_fn1_act(reg_x)
+        reg_out = self.regression_out(x)
         return reg_out
 
     def _init(self):

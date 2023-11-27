@@ -12,11 +12,13 @@ class DatasetEEGNoise(Dataset):
         eeg_data: str,
         eog_data: str,
         emg_data: str,
+        noise_types: list[NoiseTypeEnum],
         eeg_count: int = None,
     ):
         self._eeg_data = np.load(eeg_data)
         self._eog_data = np.load(eog_data)
         self._emg_data = np.load(emg_data)
+        self._noise_types = noise_types
         self._eeg_data = self._eeg_data.astype(np.float32)
         self._eog_data = self._eog_data.astype(np.float32)
         self._emg_data = self._emg_data.astype(np.float32)
@@ -36,8 +38,7 @@ class DatasetEEGNoise(Dataset):
         clean_eeg_segments = self._eeg_data[index]
 
         # get random noise type
-        category = random.choice(list(NoiseTypeEnum)[:-1])
-
+        category = random.choice(self._noise_types)
         combined_eeg_segments = self._add_noise(clean_eeg_segments, category)
 
         return self._normalize(combined_eeg_segments), self._normalize(clean_eeg_segments), category.value
