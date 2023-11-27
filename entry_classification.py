@@ -1,20 +1,20 @@
 import os
 
 import numpy as np
+import sklearn.metrics
 import torch
 from torch import optim
+from torch.nn import CrossEntropyLoss
 
 from dataloader import create_dataloader
-from losses import Criterion
+from enums import NoiseTypeEnum
 from models.model_factory import ModelFactory
-import sklearn.metrics
-
-from visualiser import create_confusion_plot, plot_losses, visualise_gt_noised_and_predicted
+from visualiser import create_confusion_plot, plot_losses
 
 
 def create_model(cls_cnt: int, regressinout_out_dim: int) -> torch.nn.Module:
-    model = ModelFactory.AE(class_cnt=cls_cnt,
-                            regression_out_dim=regressinout_out_dim)
+    model = ModelFactory.AE_class(class_cnt=cls_cnt,
+                                  regression_out_dim=regressinout_out_dim)
     model = model.cuda()
     return model
 
@@ -40,33 +40,21 @@ def train_single_epoch(model: torch.nn.Module,
                        loss_history: dict,
                        epoch: int) -> dict:
     model.train()
-    running_regression_loss = 0.0
-    running_classification_loss = 0.0
-    for batch_idx, (data, target_regression, target_classification) in enumerate(dl_train):
+    running_loss = 0.0
+    for batch_idx, (data, _, target_classification) in enumerate(dl_train):
         data = data.cuda()
 
-        target_regression = target_regression.cuda()
         target_classification = target_classification.cuda()
-        output_classification, output_regression = model(data)
-        loss, loss_regression, loss_classification = criterion(output_regression,
-                                                               output_classification,
-                                                               target_regression,
-                                                               target_classification)
+        output_classification, _ = model(data)
+        loss = criterion(output_classification, target_classification)
+        running_loss += loss.item()
         loss.backward()
         optimizer.step()
 
-        running_regression_loss += loss_regression.item()
-        running_classification_loss += loss_classification.item()
-
-        loss_history["train"]["regression"].append(loss_regression.item())
-        loss_history["train"]["classification"].append(loss_classification.item())
-
-    running_regression_loss /= len(dl_train.dataset)
-    running_classification_loss /= len(dl_train.dataset)
+    running_loss /= len(dl_train.dataset)
 
     print(f'Train Epoch: {epoch}\n'
-          f'\tMean Classification Loss: {running_classification_loss:.6f}\n'
-          f'\tMean Regression Loss: {running_regression_loss:.6f}')
+          f'\tMean Classification Loss: {running_loss:.6f}\n')
 
     scheduler.step()
     return loss_history
@@ -79,23 +67,15 @@ def evaluate_single_epoch(model: torch.nn.Module,
                           epoch: int,
                           save_dir: str) -> dict:
     model.eval()
-    loss_classification = 0
-    loss_regression = 0
+    loss = 0
     all_preds = np.array([])
     all_targets = np.array([])
     with torch.no_grad():
-        for data, target_regression, target_classification in dl_test:
+        for data, _, target_classification in dl_test:
             data = data.cuda()
-            target_regression = target_regression.cuda()
             target_classification = target_classification.cuda()
-            output_classification, output_regression = model(data)
-            _, loss_regr, loss_cls = criterion(output_regression,
-                                               output_classification,
-                                               target_regression,
-                                               target_classification)
-
-            loss_classification += loss_cls
-            loss_regression += loss_regr
+            output_classification, _ = model(data)
+            loss += criterion(output_classification, target_classification)
 
             predictions = output_classification.argmax(dim=1, keepdim=True).detach()
 
@@ -110,23 +90,18 @@ def evaluate_single_epoch(model: torch.nn.Module,
     #                                   )
 
     if epoch % 50 == 0:
-        all_preds = np.concatenate([all_preds, [0, 2]])
-        all_targets = np.concatenate([all_targets, [0, 2]])
         create_confusion_plot(all_preds,
                               all_targets,
                               show=False,
                               save_fig=f'{save_dir}/plots/confusion_matrix_{epoch}.png')
 
-    loss_classification /= len(dl_test.dataset)
-    loss_regression /= len(dl_test.dataset)
+    loss /= len(dl_test.dataset)
     correct = np.sum(all_preds == all_targets)
     print(f'\nTest set: \n'
-          f'\tAverage classification loss: {loss_classification:.4f}\n'
-          f'\tAverage regression loss: {loss_regression:.4f}\n'
+          f'\tAverage classification loss: {loss:.4f}\n'
           f'\tAccuracy: {correct}/{len(dl_test.dataset)} '
           f'({100. * correct / len(dl_test.dataset):.0f}%)\n')
-    loss_history["test"]["regression"].append(loss_regression.item())
-    loss_history["test"]["classification"].append(loss_classification.item())
+    loss_history["test"]["classification"].append(loss.item())
     return loss_history
 
 
@@ -137,11 +112,10 @@ def create_stats(model: torch.nn.Module,
     all_preds = np.array([])
     all_targets = np.array([])
     with torch.no_grad():
-        for data, target_regression, target_classification in dl_test:
+        for data, _, target_classification in dl_test:
             data = data.cuda()
-            target_regression = target_regression.cuda()
             target_classification = target_classification.cuda()
-            output_classification, output_regression = model(data)
+            output_classification, _ = model(data)
 
             predictions = output_classification.argmax(dim=1, keepdim=True).detach()
 
@@ -181,7 +155,6 @@ def train(model: torch.nn.Module,
     for epoch in range(epoch_cnt):
         loss_history = train_single_epoch(model, criterion, optimizer, scheduler, dl_train, loss_history, epoch)
         loss_history = evaluate_single_epoch(model, criterion, dl_test, loss_history, epoch, save_dir)
-    plot_losses(loss_history, save_dir=f"{save_dir}/plots/regression_train.png")
     create_stats(model, dl_test, save_dir)
     torch.save(model.state_dict(), f"{save_dir}/model/model.pth")
 
@@ -194,11 +167,13 @@ def main():
 
     model = create_model(cls_cnt=CLS_CNT,
                          regressinout_out_dim=REGRESSION_OUT_DIM)
-    criterion = Criterion()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.00003)
-    dl_train, dl_test = create_dataloader(BATCH_SIZE)
+    criterion = CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
+    dl_train, dl_test = create_dataloader(BATCH_SIZE,
+                                          [NoiseTypeEnum.EYE_MOVEMENT,
+                                           NoiseTypeEnum.FACIAL_MUSCLES_MOVEMENT,
+                                           NoiseTypeEnum.CLEAN])
     # for batch_idx, (data, target_regression, target_classification) in enumerate(dl_train):
-    #
     # 30+60+120+240 = 450
     scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
                                                                T_0=30,
