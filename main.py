@@ -6,15 +6,15 @@ from torch import optim
 
 from dataloader import create_dataloader
 from losses import Criterion
-from models import ResnetFactory
+from models.model_factory import ModelFactory
 import sklearn.metrics
 
 from visualiser import create_confusion_plot, plot_losses, visualise_gt_noised_and_predicted
 
 
 def create_model(cls_cnt: int, regressinout_out_dim: int) -> torch.nn.Module:
-    model = ResnetFactory.AE(class_cnt=cls_cnt,
-                                   regression_out_dim=regressinout_out_dim)
+    model = ModelFactory.AE(class_cnt=cls_cnt,
+                            regression_out_dim=regressinout_out_dim)
     model = model.cuda()
     return model
 
@@ -40,6 +40,8 @@ def train_single_epoch(model: torch.nn.Module,
                        loss_history: dict,
                        epoch: int) -> dict:
     model.train()
+    running_regression_loss = 0.0
+    running_classification_loss = 0.0
     for batch_idx, (data, target_regression, target_classification) in enumerate(dl_train):
         data = data.cuda()
 
@@ -52,12 +54,21 @@ def train_single_epoch(model: torch.nn.Module,
                                                                target_classification)
         loss.backward()
         optimizer.step()
-        if batch_idx % 10 == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tRegression Loss: {:.6f}\tClassification Loss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(dl_train.dataset),
-                       100. * batch_idx / len(dl_train), loss_regression.item(), loss_classification.item()))
+
+        running_regression_loss += loss_regression.item()
+        running_classification_loss += loss_classification.item()
+
         loss_history["train"]["regression"].append(loss_regression.item())
         loss_history["train"]["classification"].append(loss_classification.item())
+        print(loss_history["train"]["regression"][-1])
+
+    running_regression_loss /= len(dl_train.dataset)
+    running_classification_loss /= len(dl_train.dataset)
+
+    print(f'Train Epoch: {epoch}\n'
+          f'\tMean Classification Loss: {running_classification_loss:.6f}\n'
+          f'\tMean Regression Loss: {running_regression_loss:.6f}')
+
     scheduler.step()
     return loss_history
 
@@ -71,7 +82,6 @@ def evaluate_single_epoch(model: torch.nn.Module,
     model.eval()
     loss_classification = 0
     loss_regression = 0
-    correct = 0
     all_preds = np.array([])
     all_targets = np.array([])
     with torch.no_grad():
@@ -96,7 +106,10 @@ def evaluate_single_epoch(model: torch.nn.Module,
 
             all_preds = np.concatenate([all_preds, predictions])
             all_targets = np.concatenate([all_targets, target_classification])
+
     if epoch % 50 == 0:
+        all_preds = np.concatenate([all_preds, [2]])
+        all_targets = np.concatenate([all_targets, [2]])
         create_confusion_plot(all_preds,
                               all_targets,
                               show=False,
@@ -104,14 +117,12 @@ def evaluate_single_epoch(model: torch.nn.Module,
 
     loss_classification /= len(dl_test.dataset)
     loss_regression /= len(dl_test.dataset)
-    print('\nTest set: \n'
-          '            Average classification loss: {:.4f}\n'
-          '            Average regression loss: {:.4f}\n'
-          '            Accuracy: {}/{} ({:.0f}%)\n'.format(loss_classification,
-                                                           loss_regression,
-                                                           correct,
-                                                           len(dl_test.dataset),
-                                                           100. * correct / len(dl_test.dataset)))
+    correct = np.sum(all_preds == all_targets)
+    print(f'\nTest set: \n'
+          f'\tAverage classification loss: {loss_classification:.4f}\n'
+          f'\tAverage regression loss: {loss_regression:.4f}\n'
+          f'\tAccuracy: {correct}/{len(dl_test.dataset)} '
+          f'({100. * correct / len(dl_test.dataset):.0f}%)\n')
     loss_history["test"]["regression"].append(loss_regression.item())
     loss_history["test"]["classification"].append(loss_classification.item())
     return loss_history
@@ -182,18 +193,15 @@ def main():
     model = create_model(cls_cnt=CLS_CNT,
                          regressinout_out_dim=REGRESSION_OUT_DIM)
     criterion = Criterion()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.000_05)
     dl_train, dl_test = create_dataloader(BATCH_SIZE)
     # for batch_idx, (data, target_regression, target_classification) in enumerate(dl_train):
-    #     dirty = data[0]
-    #     clean = target_regression[0]
-    #     cls = target_classification[0]
-    #     visualise_gt_noised_and_predicted(dirty, clean, clean)
+    #
     # 30+60+120+240 = 450
     scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,
                                                                T_0=30,
                                                                T_mult=2,
-                                                               eta_min=0.0000001)
+                                                               eta_min=0.000_000_01)
 
     train(model, criterion, optimizer, scheduler, dl_train, dl_test, "./results", EPOCH_CNT)
 
