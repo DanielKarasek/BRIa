@@ -30,7 +30,9 @@ class DatasetEEGNoise(Dataset):
                     f"eeg_count ({eeg_count}) must be less than eeg_data length ({len(self._eeg_data)})"
                 )
 
-            indexes = np.random.choice(self._eeg_data.shape[0], eeg_count, replace=False)
+            indexes = np.random.choice(
+                self._eeg_data.shape[0], eeg_count, replace=False
+            )
             self._eeg_data = self._eeg_data[indexes]
 
     def __len__(self) -> int:

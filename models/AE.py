@@ -71,7 +71,7 @@ class AE_class(torch.nn.Module):
             torch.nn.ReLU(),
             torch.nn.Linear(256, 256),
             torch.nn.ReLU(),
-            torch.nn.Linear(256, 512)
+            torch.nn.Linear(256, 512),
         )
         self.classification_head = ClassificationHead(512, class_cnt)
         self.regression_head = RegressionHead(512, regression_out_dim)
